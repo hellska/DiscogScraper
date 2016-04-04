@@ -112,30 +112,25 @@ class DiscogScraper():
         releasedictarray = []
         jdecoder = json.JSONDecoder()
         finded = False
-        songdict = {}
+        songdict = self.create_songdict()
         counter = 0
-        songdict['styles'] = []
         with open(tempfile) as jsonfile:
             text = jsonfile.read()
             while text:
                 obj, idx = jdecoder.raw_decode(text)
-                tracks = obj['tracklist']
-                
+                tracks = obj['tracklist']                
                 for i in tracks:
                     if str(self.song_string).lower() in i['title'].lower():
                         finded = True
                         counter += 1
+                        songdict['release_count'] = counter
                         if counter == 1:
                             songdict['title'] = self.song_title
-                            songdict['genres'] = obj['genres']
-                            songdict['release_count'] = counter
-                        else:
-                            songdict['release_count'] = counter
-                            songdict['genres'] = sorted(set(songdict['genres'] + obj['genres']))
+                        self.weight_genres(songdict,obj['genres'])
                         if 'styles' in obj:
-                            #print "Found: ", i['title'], obj['genres'], obj['styles']
-                            songdict['styles'] = obj['styles']
-                            songdict['styles'] = sorted(set(songdict['styles']))
+                            #songdict['styles'] = obj['styles']
+                            #songdict['styles'] = sorted(set(songdict['styles']))
+                            self.weight_styles(songdict,obj['styles'])
                         
                 text = text[idx:].lstrip()
         if finded==True:
@@ -148,7 +143,8 @@ class DiscogScraper():
                 source = dic2
             else:
                 if len(dic1.keys())==0:
-                    target = dic1.update(dic2)
+                    target = dic1.copy()
+                    target = target.update(dic2)
                     #return target
                 else:
                     target = dic2
@@ -159,6 +155,10 @@ class DiscogScraper():
                     target[k] = sorted(set(target[k]+source[k]))
                 elif type(target[k])==int:
                     target[k] = target[k] + source[k]
+                elif type(target[k])==dict and k == 'genres':
+                    self.weight_genres(target, source[k])
+                elif type(target[k])==dict and k == 'styles':
+                    self.weight_styles(target, source[k])
                 elif k=='title' and target['title']=="":
                     target['title'] = source['title']
             
@@ -169,7 +169,61 @@ class DiscogScraper():
     def create_songdict(self):
         songdict = {}
         songdict['title'] = ""
-        songdict['genres'] = []
-        songdict['styles'] = []
+        songdict['genres'] = {}
+        songdict['styles'] = {}
         songdict['release_count'] = 0
         return songdict
+    
+    def create_songdict_complete(self):
+        songdict = {}
+        songdict['title'] = ""
+        songdict['genres'] = {}
+        songdict['styles'] = {}
+        songdict['release_count'] = 0
+        return songdict
+    
+    def weight_genres(self, target, genres):
+        if target['genres'].keys() == []:
+            for i in genres:
+                target['genres'][str(i).lower()] = 1
+        else:
+            tgenres = target['genres'].keys()
+            for i in genres:
+                tmpg = str(i).lower()
+                if tmpg in tgenres:
+                    #target['genres'][tmpg] = (target['genres'][tmpg] + 1) / target['release_count']
+                    if type(genres)==dict:
+                        target['genres'][tmpg] = (target['genres'][tmpg] + genres[i])
+                    else:
+                        target['genres'][tmpg] = (target['genres'][tmpg] + 1)
+                else:
+                    #target['genres'][tmpg] = 1 / float(target['release_count'])
+                    if type(genres)==dict:
+                        target['genres'][tmpg] = genres[i]
+                    else:
+                        target['genres'][tmpg] = 1
+            
+        return target
+    
+    def weight_styles(self, target, styles):
+        if target['styles'].keys() == []:
+            for i in styles:
+                target['styles'][str(i).lower()] = 1
+        else:
+            tstyles = target['styles'].keys()
+            for i in styles:
+                tmpg = str(i).lower()
+                if tmpg in tstyles:
+                    #target['genres'][tmpg] = (target['genres'][tmpg] + 1) / target['release_count']
+                    if type(styles)==dict:
+                        target['styles'][tmpg] = (target['styles'][tmpg] + styles[i])
+                    else:
+                        target['styles'][tmpg] = (target['styles'][tmpg] + 1)
+                else:
+                    #target['genres'][tmpg] = 1 / float(target['release_count'])
+                    if type(styles)==dict:
+                        target['styles'][tmpg] = styles[i]
+                    else:
+                        target['styles'][tmpg] = 1
+            
+        return target
