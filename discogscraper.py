@@ -6,37 +6,38 @@ class DiscogScraper():
     Simple Class to retrieve data from the Discogs website
     It uses curl command to download the json files from the website
     """
-    def __init__(self, token, search_string, song_title):
+    def __init__(self, token, artist_name, song_title):
         self.main_url = 'https://api.discogs.com/'
         self.search_url = 'database/search'
         self.release_url = 'releases/'
         self.scrape_command = 'curl'
         self.json_path = 'json_releases/'
         self.token = token
-        self.tempFile = ''
-        self.search_string = search_string
+        self.artist_name = artist_name.replace(" ", "%20")
+        self.artist_string = artist_name
         self.song_title = song_title.replace(" ", "%20")
         self.song_string = song_title
+        self.tempFile = './' + self.json_path + self.artist_name + self.song_title + '.json'
         if not os.path.isdir(self.json_path) and not os.path.exists(self.json_path):
             print "Create the Directory to store json files"
             os.makedirs(self.json_path)
     
-    def search_command(self, search_string='', song_title='', page=1):
+    def search_command(self, artist_name='', song_title='', page=1):
         """
             This function format the curl command to retrieve data from discogs
             It uses the token authentication - pass a valid Discogs Token
-            It uses the initialized search_string and song_title
+            It uses the initialized artist_name and song_title
         """
-        if (search_string!='' and song_title!=''):
-            self.search_string = search_string.replace(" ", "%20")
+        if (artist_name!='' and song_title!=''):
+            self.artist_name = artist_name.replace(" ", "%20")
             self.song_title = song_title.replace(" ", "%20")
-        elif (search_string!=''):
-            self.search_string = search_string.replace(" ", "%20")
+        elif (artist_name!=''):
+            self.artist_name = artist_name.replace(" ", "%20")
         else:
             print("Use Initialization Values")
             
-        self.tempFile = './' + self.json_path + self.search_string + self.song_title + '_' + str(page) + '.json'
-        tempUrl = self.main_url + self.search_url + '?q=' + self.search_string + '&token=' + self.token
+        #self.tempFile = './' + self.json_path + self.artist_name + self.song_title + '_' + str(page) + '.json'
+        tempUrl = self.main_url + self.search_url + '?q=' + self.artist_name + '&token=' + self.token
         if self.song_title:
             tempUrl += '&track=' + self.song_title
             
@@ -44,6 +45,11 @@ class DiscogScraper():
         return command
         
     def release_command(self, rel_id):
+        """
+            Format the curl command to retrieve a specific release from discogs
+            Returns the command formatted string
+            Does not execute the command!
+        """
         # curl "https://api.discogs.com/releases/1117108" --user-agent "FooBarApp/3.0" >> release_1117108.json
         relfile = './' + self.json_path + str(rel_id)+'.json'
         tempurl = self.main_url + self.release_url + str(rel_id)
@@ -53,7 +59,8 @@ class DiscogScraper():
     
     def get_url(self, command):
         """
-            This function download a single json file
+            This function download the data from Discogs
+            It just executes the commands formatted with release_command and search_command methods
         """
     
         data, error = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE).communicate()
@@ -69,8 +76,8 @@ class DiscogScraper():
     
     def releasecollect(self):
         """
-            This function downloads all the discogs pages for the research info used
-            For each page download all the associated releases
+            Extract all the relese IDs from a returned search file
+            Returns a list of IDs and the URL of the next page (useful to cycle all the result pages)
         """
         releaseids = []
         nextsong = 0
@@ -93,6 +100,10 @@ class DiscogScraper():
         return releaseids, nextsong
     
     def get_tracklist(self, rel_id):
+        """
+            Extract a tracklist from a release file
+            Returns an array of dictionaries
+        """
         tempfile = self.json_path + str(rel_id) + '.json'
         releasedictarray = []
         jdecoder = json.JSONDecoder()
@@ -105,9 +116,12 @@ class DiscogScraper():
                 releasedictarray.append(tracks)
                 text = text[idx:].lstrip()
         return releasedictarray
-        #print tempfile
     
     def chek_release(self, rel_id):
+        """
+            Check if a release contain a song and extract genre and style from the release
+            Returns a dictionary with the retrieved informations if it find the track
+        """
         tempfile = self.json_path + str(rel_id) + '.json'
         releasedictarray = []
         jdecoder = json.JSONDecoder()
@@ -125,11 +139,11 @@ class DiscogScraper():
                         counter += 1
                         songdict['release_count'] = counter
                         if counter == 1:
-                            songdict['title'] = self.song_title
-                        self.weight_genres(songdict,obj['genres'])
+                            songdict['title'] = self.song_string
+                            songdict['artist'] = self.artist_string
+                        if 'genres' in obj:
+                            self.weight_genres(songdict,obj['genres'])
                         if 'styles' in obj:
-                            #songdict['styles'] = obj['styles']
-                            #songdict['styles'] = sorted(set(songdict['styles']))
                             self.weight_styles(songdict,obj['styles'])
                         
                 text = text[idx:].lstrip()
@@ -137,6 +151,10 @@ class DiscogScraper():
             return songdict
     
     def merge_song_dict(self, dic1, dic2):
+        """
+            Merges two song dictionaries keeping the genres, styles and release_count consistent
+            Returns the dictionary with the merged data
+        """
         if type(dic1) == type(dic2) == dict:
             if len(dic1.keys())>=len(dic2.keys()):
                 target = dic1
@@ -161,21 +179,19 @@ class DiscogScraper():
                     self.weight_styles(target, source[k])
                 elif k=='title' and target['title']=="":
                     target['title'] = source['title']
-            
+                elif k=='artist' and target['artist']=="":
+                    target['artist'] = source['artist']
             return target
         else:
             raise ValueError("Input two dictionaries")
         
     def create_songdict(self):
+        """
+            Creates the song dictionary data structure
+            Returns a complete dictionary with empty values
+        """
         songdict = {}
-        songdict['title'] = ""
-        songdict['genres'] = {}
-        songdict['styles'] = {}
-        songdict['release_count'] = 0
-        return songdict
-    
-    def create_songdict_complete(self):
-        songdict = {}
+        songdict['artist'] = ""
         songdict['title'] = ""
         songdict['genres'] = {}
         songdict['styles'] = {}
@@ -183,6 +199,10 @@ class DiscogScraper():
         return songdict
     
     def weight_genres(self, target, genres):
+        """
+            Merge the genres key of the song dictionary keeping the counters consistent
+            Returns the dictionary with the merged data
+        """
         if target['genres'].keys() == []:
             for i in genres:
                 target['genres'][str(i).lower()] = 1
@@ -206,6 +226,10 @@ class DiscogScraper():
         return target
     
     def weight_styles(self, target, styles):
+        """
+            Merge the styles key of the song dictionary keeping the counters consistent
+            Returns the dictionary with the merged data
+        """
         if target['styles'].keys() == []:
             for i in styles:
                 target['styles'][str(i).lower()] = 1
