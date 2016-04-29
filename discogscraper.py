@@ -19,7 +19,7 @@ class DiscogScraper():
         self.song_string = song_title
         self.tempFile = './' + self.json_path + self.artist_name + self.song_title + '.json'
         if not os.path.isdir(self.json_path) and not os.path.exists(self.json_path):
-            print "Create the Directory to store json files"
+            # print "Create the Directory to store json files"
             os.makedirs(self.json_path)
     
     def search_command(self, artist_name='', song_title='', page=1):
@@ -33,8 +33,8 @@ class DiscogScraper():
             self.song_title = song_title.replace(" ", "%20")
         elif (artist_name!=''):
             self.artist_name = artist_name.replace(" ", "%20")
-        else:
-            print("Use Initialization Values")
+#        else:
+#            print("Use Initialization Values")
             
         #self.tempFile = './' + self.json_path + self.artist_name + self.song_title + '_' + str(page) + '.json'
         tempUrl = self.main_url + self.search_url + '?q=' + self.artist_name + '&token=' + self.token
